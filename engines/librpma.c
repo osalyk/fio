@@ -54,6 +54,7 @@ static struct fio_option fio_client_options[] = {
 
 struct client_data {
 	struct rpma_peer *peer;
+	struct rpma_mr_local *local_mr;
 
 	/* in-memory queues */
 	struct io_u **io_us_queued;
@@ -82,10 +83,22 @@ static int client_init(struct thread_data *td)
 
 static int client_post_init(struct thread_data *td)
 {
-	/*
-	 * - rpma_mr_reg td->org_buffer
-	 */
+	struct client_data *cd =  td->io_ops_data;
 
+	/* register each io_u in the free list */
+	for (int i = 0; i < td->io_u_freelist.nr; i++) {
+		struct io_u *io_u = td->io_u_freelist.io_us[i];
+
+		int ret = rpma_mr_reg(cd->peer, io_u->buf, io_u->buflen,
+			RPMA_MR_USAGE_READ_DST | RPMA_MR_USAGE_READ_SRC |
+			RPMA_MR_USAGE_WRITE_DST | RPMA_MR_USAGE_WRITE_SRC,
+			&cd->local_mr);
+		if (ret) {
+			log_err("fio: rpma_mr_reg io_u failed: %s\n",
+			rpma_err_2str(ret));
+			return 1;
+		}
+	}
 	return 0;
 }
 
