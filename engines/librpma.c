@@ -17,6 +17,7 @@
 #include "../hash.h"
 #include "../optgroup.h"
 
+#include <libpmem.h>
 #include <librpma.h>
 
 #define rpma_td_verror(td, err, func) \
@@ -191,10 +192,10 @@ err_conn_delete:
 	(void) rpma_conn_delete(&cd->conn);
 
 err_req_delete:
-        if (req)
-                (void) rpma_conn_req_delete(&req);
+	if (req)
+		(void) rpma_conn_req_delete(&req);
 err_peer_delete:
-        (void) rpma_peer_delete(&cd->peer);
+	(void) rpma_peer_delete(&cd->peer);
 
 err_free_io_us_completed:
 	free(cd->io_us_completed);
@@ -558,48 +559,108 @@ static struct fio_option fio_server_options[] = {
 
 struct server_data {
 	struct rpma_peer *peer;
+	struct rpma_conn *conn;
+	struct rpma_ep *ep;
+	void *file;
 };
 
 static int server_init(struct thread_data *td)
 {
 	struct server_options *o = td->eo;
-	(void) o; /* XXX delete when o will be used */
+	struct server_data *sd;
+	struct ibv_context *dev = NULL;
+	int ret = 1;
 
-	/*
-	 * - allocate server's data
-	 * - find ibv_context using o->bindname
-	 * - create new peer and endpoint (o->bindname and o->port)
-	 */
+	/* allocate server's data */
+	sd = calloc(1, sizeof(struct server_data));
+	if (sd == NULL) {
+		td_verror(td, errno, "calloc");
+		return 1;
+	}
 
+	/* obtain an IBV context for a remote IP address */
+	ret = rpma_utils_get_ibv_context(o->bindname,
+				RPMA_UTIL_IBV_CONTEXT_LOCAL,
+				&dev);
+	if (ret) {
+		rpma_td_verror(td, ret, "rpma_utils_get_ibv_context");
+		goto err_free_sd;
+	}
+
+	/* create a new peer object */
+	ret = rpma_peer_new(dev, &sd->peer);
+	if (ret) {
+		rpma_td_verror(td, ret, "rpma_peer_new");
+		goto err_free_sd;
+	}
+
+	/* start a listening endpoint at addr:port */
+	ret = rpma_ep_listen(sd->peer, o->bindname, o->port, &sd->ep);
+	if (ret) {
+		rpma_td_verror(td, ret, "rpma_ep_listen");
+		goto err_peer_delete;
+	}
+
+	td->io_ops_data = sd;
 	return 0;
+
+err_peer_delete:
+	(void) rpma_peer_delete(&sd->peer);
+
+err_free_sd:
+	free(sd);
+
+	return ret;
 }
 
 static void server_cleanup(struct thread_data *td)
 {
-	/*
-	 * - shutdown ep
-	 * - free peer
-	 */
+	int ret;
+
+	if ((ret = rpma_ep_shutdown(&sd->ep)))
+		rpma_td_verror(td, ret, "rpma_ep_shutdown");
+	if ((ret = rpma_peer_delete(&sd->peer)))
+		rpma_td_verror(td, ret, "rpma_peer_delete");
+	return ret;
 }
 
 static int server_open_file(struct thread_data *td, struct fio_file *f)
 {
-	/*
-	 * - pmem_map_file
-	 * - rpma_mr_reg -> f->engine_data
-	 */
+	mode_t mode = 0;
+	size_t mapped_len;
+	int is_pmem;
+	int ret;
 
-	return 0;
+	if(td_rw(td))
+		mode = S_IWUSR | S_IRUSR;
+	else if (td_write(td))
+		mode = S_IWUSR;
+	else
+		mode = S_IRUSR;
+
+	if((sd->file = pmem_map_file(f->file_name, f->real_file_size, PMEM_FILE_CREATE, mode, &mapped_len, &is_pmem)) == NULL) {
+		td_verror(td, errno, "pmem_map_file");
+		return -1;
+	}
+
+	if ((ret = rpma_mr_reg(sd->peer, td->orig_buffer, td->orig_buffer_size,
+			RPMA_MR_USAGE_READ_DST | RPMA_MR_USAGE_READ_SRC |
+			RPMA_MR_USAGE_WRITE_DST | RPMA_MR_USAGE_WRITE_SRC,
+			&f->engine_data)))
+		rpma_td_verror(td, ret, "rpma_mr_reg");
+
+	return ret;
 }
 
 static int server_close_file(struct thread_data *td, struct fio_file *f)
 {
-	/*
-	 * - rpma_mr_dereg
-	 * - pmem_unmap
-	 */
+	int ret;
+	if ((ret = rpma_mr_dereg(&cd->orig_mr)))
+		rpma_td_verror(td, ret, "rpma_mr_dereg");
+	if ((ret = pmem_unmap(sd->file, td->orig_buffer_size) < 0))
+		td_verror(td, errno, "pmem_unmap");
 
-	return 0;
+	return ret;
 }
 
 static enum fio_q_status server_queue(struct thread_data *td,
