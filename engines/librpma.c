@@ -173,26 +173,27 @@ static int client_init(struct thread_data *td)
 	}
 
 	/* the send queue has to be big enough to accommodate all io_u's */
-	if (td_write(td)) {
-		if (td->o.sync_io) {
-			sq_size = 2; /* WRITE + FLUSH */
-		} else {
-			/*
-			 * N * WRITE + B * FLUSH where:
-			 * - B == ceil(iodepth / iodepth_batch) ~=
-			 *   iodepth / iodepth_batch + 1
-			 *   which is the number of batches for N writes
-			 */
-			sq_size = td->o.iodepth +
-				td->o.iodepth / td->o.iodepth_batch + 1;
-		}
+	/* if (td_write(td)) {
+	 *	if (td->o.sync_io) {
+	 *		sq_size = 2; 
+	 *	} else {
+	 *		
+	 *		  N * WRITE + B * FLUSH where:
+	 *		  - B == ceil(iodepth / iodepth_batch) ~=
+	 *		    iodepth / iodepth_batch + 1
+	 *		    which is the number of batches for N writes
+	 *		 
+	 *		sq_size = td->o.iodepth +
+	 *			td->o.iodepth / td->o.iodepth_batch + 1;
+	 *	}
+	 * } else {
+	 */
+	if (td->o.sync_io) {
+		sq_size = 1; /* READ/WRITE */
 	} else {
-		if (td->o.sync_io) {
-			sq_size = 1; /* READ */
-		} else {
-			sq_size = td->o.iodepth; /* N x READ */
-		}
+		sq_size = td->o.iodepth; /* N x READ/WRITE */
 	}
+
 	ret = rpma_conn_cfg_set_sq_size(cfg, sq_size);
 	if (ret) {
 		rpma_td_verror(td, ret, "rpma_conn_cfg_set_sq_size");
@@ -510,12 +511,7 @@ static enum fio_q_status client_queue_sync(struct thread_data *td,
 			goto err;
 	} else if (io_u->ddir == DDIR_WRITE) {
 		/* post an RDMA write operation */
-		if ((ret = client_io_write(td, io_u, RPMA_F_COMPLETION_ON_ERROR)))
-			goto err;
-		if ((ret = rpma_flush(cd->conn, cd->server_mr,
-				io_u->offset, io_u->xfer_buflen,
-				cd->flush_type, RPMA_F_COMPLETION_ALWAYS,
-				(void *)(uintptr_t)io_u->index)))
+		if ((ret = client_io_write(td, io_u, RPMA_F_COMPLETION_ALWAYS)))
 			goto err;
 	} else {
 		log_err("unsupported IO mode: %s\n", io_ddir_name(io_u->ddir));
@@ -577,7 +573,7 @@ static int client_commit(struct thread_data *td)
 	bool fill_time;
 	int ret;
 	int i;
-	unsigned long long flush_len = 0;
+	// unsigned long long flush_len = 0;
 
 	if (!cd->io_us_queued)
 		return -1;
@@ -601,22 +597,26 @@ static int client_commit(struct thread_data *td)
 			 *   flush_len for nonadjacent writes
 			 */
 			/* post an RDMA write operation */
-			if ((ret = client_io_write(td, io_u, RPMA_F_COMPLETION_ON_ERROR)))
-				return -1;
+			if (i == cd->io_u_queued_nr - 1)
+                                flags = RPMA_F_COMPLETION_ALWAYS;
+                        /* post an RDMA read operation */
+                        if ((ret = client_io_write(td, io_u, flags)))
+                                return -1;
 
-			flush_len += io_u->xfer_buflen;
-
-			if (i < cd->io_u_queued_nr - 1)
-				continue;
-
-			ret = rpma_flush(cd->conn, cd->server_mr,
-				io_u->offset, flush_len,
-				cd->flush_type, RPMA_F_COMPLETION_ALWAYS,
-				(void *)(uintptr_t)io_u->index);
-			if (ret) {
-				rpma_td_verror(td, ret, "rpma_flush");
-				return -1;
-			}
+			/* flush_len += io_u->xfer_buflen;
+			 *
+			 * if (i < cd->io_u_queued_nr - 1)
+			 *	continue;
+			 *
+			 * ret = rpma_flush(cd->conn, cd->server_mr,
+			 *	io_u->offset, flush_len,
+			 *	cd->flush_type, RPMA_F_COMPLETION_ALWAYS,
+			 *	(void *)(uintptr_t)io_u->index);
+			 * if (ret) {
+			 *	rpma_td_verror(td, ret, "rpma_flush");
+			 *	return -1;
+			 * }
+			 */
 		} else {
 			log_err("unsupported IO mode: %s\n", io_ddir_name(io_u->ddir));
 			return -1;
