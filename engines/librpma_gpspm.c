@@ -141,6 +141,7 @@ static int client_init(struct thread_data *td)
 	struct rpma_conn_req *req = NULL;
 	enum rpma_conn_event event;
 	uint32_t cq_size;
+	unsigned int sq_size;
 	struct rpma_conn_private_data pdata;
 	struct example_common_data *data;
 	int ret = 1;
@@ -192,7 +193,22 @@ static int client_init(struct thread_data *td)
 	}
 
 	/* the send queue has to be big enough to accommodate all io_u's */
-	ret = rpma_conn_cfg_set_sq_size(cfg, td->o.iodepth);
+	if (td_write(td)) {
+		if (td->o.sync_io) {
+			sq_size = 2;
+		} else {
+			sq_size = td->o.iodepth +
+				td->o.iodepth / td->o.iodepth_batch + 1;
+		}
+	} else {
+		if (td->o.sync_io) {
+			sq_size = 1;
+		} else {
+			sq_size = td->o.iodepth;
+		}
+	}
+
+	ret = rpma_conn_cfg_set_sq_size(cfg, sq_size);
 	if (ret) {
 		rpma_td_verror(td, ret, "rpma_conn_cfg_set_sq_size");
 		goto err_cfg_delete;
