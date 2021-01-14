@@ -22,14 +22,6 @@
 #include <libpmem.h>
 #include <librpma.h>
 
-/* client's and server's common */
-
-#define rpma_td_verror(td, err, func) \
-	td_vmsg((td), (err), rpma_err_2str(err), (func))
-
-/* ceil(a / b) = (a + b - 1) / b */
-#define CEIL(a, b) (((a) + (b) - 1) / (b))
-
 /*
  * Limited by the maximum length of the private data
  * for rdma_connect() in case of RDMA_PS_TCP (28 bytes).
@@ -115,10 +107,10 @@ static int client_init(struct thread_data *td)
 	char port_td[LIBRPMA_COMMON_PORT_STR_LEN_MAX];
 	struct rpma_conn_req *req = NULL;
 	enum rpma_conn_event event;
-	uint32_t cq_size;
 	struct rpma_conn_private_data pdata;
 	struct workspace *ws;
 	size_t server_mr_size;
+	uint32_t cq_size;
 	int remote_flush_type;
 	struct rpma_peer_cfg *pcfg = NULL;
 	unsigned int sq_size;
@@ -274,6 +266,7 @@ static int client_init(struct thread_data *td)
 	if ((ret = rpma_conn_get_private_data(cd->conn, &pdata)))
 		goto err_conn_delete;
 
+	/* create the server's workspace representation */
 	ws = pdata.ptr;
 
 	/* create the server's memory representation */
@@ -585,13 +578,13 @@ static enum fio_q_status client_queue(struct thread_data *td,
 static int client_commit(struct thread_data *td)
 {
 	struct client_data *cd = td->io_ops_data;
-	int flags = RPMA_F_COMPLETION_ON_ERROR;
 	struct timespec now;
 	bool fill_time;
-	int ret;
 	int i;
 	struct io_u *flush_first_io_u = NULL;
 	unsigned long long int flush_len = 0;
+	int flags = RPMA_F_COMPLETION_ON_ERROR;
+	int ret;
 
 	if (!cd->io_us_queued)
 		return -1;
@@ -695,13 +688,13 @@ static int client_getevent_process(struct thread_data *td)
 {
 	struct client_data *cd = td->io_ops_data;
 	struct rpma_completion cmpl;
-	unsigned int io_us_error = 0;
 	/* io_u->index of completed io_u (cmpl.op_context) */
 	unsigned int io_u_index;
 	/* # of completed io_us */
 	int cmpl_num = 0;
 	/* helpers */
 	struct io_u *io_u;
+	unsigned int io_us_error = 0;
 	int i;
 	int ret;
 
@@ -968,16 +961,16 @@ static int server_open_file(struct thread_data *td, struct fio_file *f)
 	struct server_data *sd =  td->io_ops_data;
 	struct server_options *o = td->eo;
 	enum rpma_conn_event conn_event = RPMA_CONN_UNDEFINED;
-	struct rpma_mr_local *mr;
-	char *mem_ptr = NULL;
-	size_t mr_desc_size;
 	size_t mem_size = td->o.size;
 	struct rpma_conn_private_data pdata;
+	struct rpma_mr_local *mr;
 	struct workspace ws;
 	struct rpma_conn_req *conn_req;
 	struct rpma_conn *conn;
 	char port_td[LIBRPMA_COMMON_PORT_STR_LEN_MAX];
 	struct rpma_ep *ep;
+	char *mem_ptr = NULL;
+	size_t mr_desc_size;
 	int ret = 1;
 
 	if (!f->file_name) {
