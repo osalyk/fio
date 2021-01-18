@@ -32,8 +32,9 @@
  *		unsigned long long int len);
  */
 
-static int client_get_io_u_index(struct rpma_completion *cmpl,
-		unsigned int *io_u_index);
+/* static int client_get_io_u_index(struct rpma_completion *cmpl,
+ *		unsigned int *io_u_index);
+ */
 
 static int client_init(struct thread_data *td)
 {
@@ -160,7 +161,7 @@ static int client_init(struct thread_data *td)
 	}
 
 	/* ccd->flush = client_io_flush; */
-	ccd->get_io_u_index = client_get_io_u_index;
+	/* ccd->get_io_u_index = client_get_io_u_index; */
 	/* ccd->client_data = cd; */
 
 	return 0;
@@ -207,13 +208,14 @@ static void client_cleanup(struct thread_data *td)
  * }
  */
 
-static int client_get_io_u_index(struct rpma_completion *cmpl,
-		unsigned int *io_u_index)
-{
-	memcpy(io_u_index, &cmpl->op_context, sizeof(unsigned int));
-
-	return 0;
-}
+/* static int client_get_io_u_index(struct rpma_completion *cmpl,
+ *		unsigned int *io_u_index)
+ * {
+ *	memcpy(io_u_index, &cmpl->op_context, sizeof(unsigned int));
+ *
+ *	return 0;
+ * }
+ */
 
 FIO_STATIC struct ioengine_ops ioengine_client = {
 	.name			= "librpma_client",

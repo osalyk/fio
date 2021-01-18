@@ -77,8 +77,9 @@ void librpma_common_free(struct librpma_common_mem *mem);
  *		unsigned long long int len);
  */
 
-typedef int (*get_io_u_index_t)(struct rpma_completion *cmpl,
-		unsigned int *io_u_index);
+/* typedef int (*get_io_u_index_t)(struct rpma_completion *cmpl,
+ *		unsigned int *io_u_index);
+ */
 
 struct librpma_common_client_data {
 	struct rpma_peer *peer;
@@ -110,7 +111,7 @@ struct librpma_common_client_data {
 	uint32_t op_send_completed;
 
 	/* flush_t flush; */
-	get_io_u_index_t get_io_u_index;
+	/* get_io_u_index_t get_io_u_index; */
 
 	/* engine-specific client data */
 	/* void *client_data; */

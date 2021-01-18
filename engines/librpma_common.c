@@ -366,6 +366,13 @@ static int librpma_common_client_io_flush(struct thread_data *td,
 	return 0;
 }
 
+static int client_get_io_u_index(struct rpma_completion *cmpl,
+		unsigned int *io_u_index)
+{
+	memcpy(io_u_index, &cmpl->op_context, sizeof(unsigned int));
+	return 0;
+}
+
 static enum fio_q_status client_queue_sync(struct thread_data *td,
 					  struct io_u *io_u)
 {
@@ -413,7 +420,7 @@ static enum fio_q_status client_queue_sync(struct thread_data *td,
 			break;
 	} while (1);
 
-	if (ccd->get_io_u_index(&cmpl, &io_u_index))
+	if (client_get_io_u_index(&cmpl, &io_u_index))
 		goto err;
 
 	if (io_u->index != io_u_index) {
@@ -597,7 +604,7 @@ static int client_getevent_process(struct thread_data *td)
 		return 0;
 	}
 
-	if (ccd->get_io_u_index(&cmpl, &io_u_index))
+	if (client_get_io_u_index(&cmpl, &io_u_index))
 		return -1;
 
 	/* look for an io_u being completed */
