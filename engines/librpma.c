@@ -23,13 +23,14 @@
 
 /* client side implementation */
 
-struct client_data {
-	enum rpma_flush_type flush_type;
-};
-
-static inline int client_io_flush(struct thread_data *td,
-		struct io_u *first_io_u, struct io_u *last_io_u,
-		unsigned long long int len);
+/* struct client_data {
+ *	enum rpma_flush_type flush_type;
+ * };
+ *
+ * static inline int client_io_flush(struct thread_data *td,
+ *		struct io_u *first_io_u, struct io_u *last_io_u,
+ *		unsigned long long int len);
+ */
 
 static int client_get_io_u_index(struct rpma_completion *cmpl,
 		unsigned int *io_u_index);
@@ -37,7 +38,7 @@ static int client_get_io_u_index(struct rpma_completion *cmpl,
 static int client_init(struct thread_data *td)
 {
 	struct librpma_common_client_data *ccd;
-	struct client_data *cd;
+	/* struct client_data *cd; */
 	unsigned int sq_size;
 	uint32_t cq_size;
 	struct rpma_conn_cfg *cfg = NULL;
@@ -52,11 +53,12 @@ static int client_init(struct thread_data *td)
 	}
 
 	/* allocate client's data */
-	cd = calloc(1, sizeof(struct client_data));
-	if (cd == NULL) {
-		td_verror(td, errno, "calloc");
-		return 1;
-	}
+	/* cd = calloc(1, sizeof(struct client_data));
+	 * if (cd == NULL) {
+	 *	td_verror(td, errno, "calloc");
+	 *	return 1;
+	 * }
+	 */
 
 	/*
 	 * Calculate the required queue sizes where:
@@ -104,7 +106,8 @@ static int client_init(struct thread_data *td)
 	ret = rpma_conn_cfg_new(&cfg);
 	if (ret) {
 		librpma_td_verror(td, ret, "rpma_conn_cfg_new");
-		goto err_free_cd;
+		/* goto err_free_cd; */
+		return -1;
 	}
 
 	/* apply queue sizes */
@@ -130,10 +133,10 @@ static int client_init(struct thread_data *td)
 		goto err_cleanup_common;
 	}
 
-	cd->flush_type = (remote_flush_type & RPMA_MR_USAGE_FLUSH_TYPE_PERSISTENT) ?
+	ccd->flush_type = (remote_flush_type & RPMA_MR_USAGE_FLUSH_TYPE_PERSISTENT) ?
 		RPMA_FLUSH_TYPE_PERSISTENT : RPMA_FLUSH_TYPE_VISIBILITY;
 
-	if (cd->flush_type == RPMA_FLUSH_TYPE_PERSISTENT) {
+	if (ccd->flush_type == RPMA_FLUSH_TYPE_PERSISTENT) {
 		/* configure peer's direct write to pmem support */
 		ret = rpma_peer_cfg_new(&pcfg);
 		if (ret) {
@@ -156,9 +159,9 @@ static int client_init(struct thread_data *td)
 		(void) rpma_peer_cfg_delete(&pcfg);
 	}
 
-	ccd->flush = client_io_flush;
+	/* ccd->flush = client_io_flush; */
 	ccd->get_io_u_index = client_get_io_u_index;
-	ccd->client_data = cd;
+	/* ccd->client_data = cd; */
 
 	return 0;
 
@@ -168,39 +171,41 @@ err_cleanup_common:
 err_cfg_delete:
 	(void) rpma_conn_cfg_delete(&cfg);
 
-err_free_cd:
-	free(cd);
-
+/* err_free_cd:
+ *	free(cd);
+ */
 	return 1;
 }
 
 static void client_cleanup(struct thread_data *td)
 {
-	struct librpma_common_client_data *ccd = td->io_ops_data;
-
-	free(ccd->client_data);
+	/* struct librpma_common_client_data *ccd = td->io_ops_data;
+ 	 *
+	 * free(ccd->client_data);
+	 */
 
 	librpma_common_client_cleanup(td);
 }
 
-static inline int client_io_flush(struct thread_data *td,
-		struct io_u *first_io_u, struct io_u *last_io_u,
-		unsigned long long int len)
-{
-	struct librpma_common_client_data *ccd = td->io_ops_data;
-	struct client_data *cd = ccd->client_data;
-	size_t dst_offset = first_io_u->offset;
-
-	int ret = rpma_flush(ccd->conn, ccd->server_mr, dst_offset, len,
-		cd->flush_type, RPMA_F_COMPLETION_ALWAYS,
-		(void *)(uintptr_t)last_io_u->index);
-	if (ret) {
-		librpma_td_verror(td, ret, "rpma_flush");
-		return -1;
-	}
-
-	return 0;
-}
+/* static inline int client_io_flush(struct thread_data *td,
+ *		struct io_u *first_io_u, struct io_u *last_io_u,
+ *		unsigned long long int len)
+ * {
+ *	struct librpma_common_client_data *ccd = td->io_ops_data;
+ *	struct client_data *cd = ccd->client_data;
+ *	size_t dst_offset = first_io_u->offset;
+ *
+ *	int ret = rpma_flush(ccd->conn, ccd->server_mr, dst_offset, len,
+ *		cd->flush_type, RPMA_F_COMPLETION_ALWAYS,
+ *		(void *)(uintptr_t)last_io_u->index);
+ *	if (ret) {
+ *		librpma_td_verror(td, ret, "rpma_flush");
+ *		return -1;
+ *	}
+ *
+ *	return 0;
+ * }
+ */
 
 static int client_get_io_u_index(struct rpma_completion *cmpl,
 		unsigned int *io_u_index)

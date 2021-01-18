@@ -72,9 +72,10 @@ char *librpma_common_allocate_pmem(struct thread_data *td, const char *filename,
 
 void librpma_common_free(struct librpma_common_mem *mem);
 
-typedef int (*flush_t)(struct thread_data *td,
-		struct io_u *first_io_u, struct io_u *last_io_u,
-		unsigned long long int len);
+/* typedef int (*flush_t)(struct thread_data *td,
+ *		struct io_u *first_io_u, struct io_u *last_io_u,
+ *		unsigned long long int len);
+ */
 
 typedef int (*get_io_u_index_t)(struct rpma_completion *cmpl,
 		unsigned int *io_u_index);
@@ -108,11 +109,12 @@ struct librpma_common_client_data {
 	/* completion counter */
 	uint32_t op_send_completed;
 
-	flush_t flush;
+	/* flush_t flush; */
 	get_io_u_index_t get_io_u_index;
 
 	/* engine-specific client data */
-	void *client_data;
+	/* void *client_data; */
+	enum rpma_flush_type flush_type;
 };
 
 int librpma_common_client_init(struct thread_data *td,

@@ -349,6 +349,23 @@ int librpma_common_client_get_file_size(struct thread_data *td,
 	return 0;
 }
 
+static int librpma_common_client_io_flush(struct thread_data *td,
+		struct io_u *first_io_u, struct io_u *last_io_u,
+		unsigned long long int len)
+{
+	struct librpma_common_client_data *ccd = td->io_ops_data;
+	size_t dst_offset = first_io_u->offset;
+
+	int ret = rpma_flush(ccd->conn, ccd->server_mr, dst_offset, len,
+			ccd->flush_type, RPMA_F_COMPLETION_ALWAYS,
+			(void *)(uintptr_t)last_io_u->index);
+	if (ret) {
+		librpma_td_verror(td, ret, "rpma_flush");
+		return -1;
+	}
+	return 0;
+}
+
 static enum fio_q_status client_queue_sync(struct thread_data *td,
 					  struct io_u *io_u)
 {
@@ -366,7 +383,8 @@ static enum fio_q_status client_queue_sync(struct thread_data *td,
 		/* post an RDMA write operation */
 		if ((ret = librpma_common_client_io_write(td, io_u)))
 			goto err;
-		if ((ret = ccd->flush(td, io_u, io_u, io_u->xfer_buflen)))
+		/* if ((ret = ccd->flush(td, io_u, io_u, io_u->xfer_buflen))) */
+		if ((ret = librpma_common_client_io_flush(td, io_u, io_u, io_u->xfer_buflen)))
 			goto err;
 	} else {
 		log_err("unsupported IO mode: %s\n", io_ddir_name(io_u->ddir));
@@ -488,7 +506,8 @@ int librpma_common_client_commit(struct thread_data *td)
 			}
 
 			/* flush all writes which build a continuous sequence */
-			ret = ccd->flush(td, flush_first_io_u, io_u, flush_len);
+			/* ret = ccd->flush(td, flush_first_io_u, io_u, flush_len); */
+			ret = librpma_common_client_io_flush(td, flush_first_io_u, io_u, flush_len);
 			if (ret)
 				return -1;
 
