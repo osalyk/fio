@@ -366,7 +366,7 @@ static enum fio_q_status client_queue_sync(struct thread_data *td,
 		/* post an RDMA write operation */
 		if ((ret = librpma_common_client_io_write(td, io_u)))
 			goto err;
-		if ((ret = ccd->flush(td, io_u, io_u, io_u->xfer_buflen)))
+		if ((ret = librpma_common_client_io_flush(td, io_u, io_u, io_u->xfer_buflen)))
 			goto err;
 	} else {
 		log_err("unsupported IO mode: %s\n", io_ddir_name(io_u->ddir));
@@ -395,7 +395,7 @@ static enum fio_q_status client_queue_sync(struct thread_data *td,
 			break;
 	} while (1);
 
-	if (ccd->get_io_u_index(&cmpl, &io_u_index))
+	if (librpma_common_client_get_io_u_index(&cmpl, &io_u_index))
 		goto err;
 
 	if (io_u->index != io_u_index) {
@@ -488,7 +488,7 @@ int librpma_common_client_commit(struct thread_data *td)
 			}
 
 			/* flush all writes which build a continuous sequence */
-			ret = ccd->flush(td, flush_first_io_u, io_u, flush_len);
+			ret = librpma_common_client_io_flush(td, flush_first_io_u, io_u, flush_len);
 			if (ret)
 				return -1;
 
@@ -578,7 +578,7 @@ static int client_getevent_process(struct thread_data *td)
 		return 0;
 	}
 
-	if (ccd->get_io_u_index(&cmpl, &io_u_index))
+	if (librpma_common_client_get_io_u_index(&cmpl, &io_u_index))
 		return -1;
 
 	/* look for an io_u being completed */

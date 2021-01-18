@@ -72,12 +72,12 @@ char *librpma_common_allocate_pmem(struct thread_data *td, const char *filename,
 
 void librpma_common_free(struct librpma_common_mem *mem);
 
-typedef int (*flush_t)(struct thread_data *td,
-		struct io_u *first_io_u, struct io_u *last_io_u,
-		unsigned long long int len);
+//typedef int (*flush_t)(struct thread_data *td,
+//		struct io_u *first_io_u, struct io_u *last_io_u,
+//		unsigned long long int len);
 
-typedef int (*get_io_u_index_t)(struct rpma_completion *cmpl,
-		unsigned int *io_u_index);
+//typedef int (*get_io_u_index_t)(struct rpma_completion *cmpl,
+//		unsigned int *io_u_index);
 
 struct librpma_common_client_data {
 	struct rpma_peer *peer;
@@ -108,11 +108,12 @@ struct librpma_common_client_data {
 	/* completion counter */
 	uint32_t op_send_completed;
 
-	flush_t flush;
-	get_io_u_index_t get_io_u_index;
+//	flush_t flush;
+//	get_io_u_index_t get_io_u_index;
 
 	/* engine-specific client data */
-	void *client_data;
+//	void *client_data;
+	enum rpma_flush_type flush_type;
 };
 
 int librpma_common_client_init(struct thread_data *td,
@@ -177,6 +178,33 @@ static inline int librpma_common_client_io_write(struct thread_data *td,
 
 	return 0;
 }
+
+static inline int librpma_common_client_io_flush(struct thread_data *td,
+		struct io_u *first_io_u, struct io_u *last_io_u,
+		unsigned long long int len)
+{
+	struct librpma_common_client_data *ccd = td->io_ops_data;
+	//struct client_data *cd = ccd->client_data;
+	size_t dst_offset = first_io_u->offset;
+
+	int ret = rpma_flush(ccd->conn, ccd->server_mr, dst_offset, len,
+			ccd->flush_type, RPMA_F_COMPLETION_ALWAYS,
+			(void *)(uintptr_t)last_io_u->index);
+	if (ret) {
+		librpma_td_verror(td, ret, "rpma_flush");
+		return -1;
+	}
+	return 0;
+}
+
+static inline int librpma_common_client_get_io_u_index(struct rpma_completion *cmpl,
+		unsigned int *io_u_index)
+{
+	memcpy(io_u_index, &cmpl->op_context, sizeof(unsigned int));
+
+	return 0;
+}
+
 
 /* servers' common */
 
